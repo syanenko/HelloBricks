@@ -48,7 +48,8 @@ GLfloat scaledColor = 1.0 / 255.0;
 GLfloat scaleX = 1.0 / (glyphScale * winWidth);
 GLfloat scaleY = 1.0 / (glyphScale * winHeight);
 
-vector <FT_OutlineGlyph> outlines;
+// vector <FT_OutlineGlyph> outlines;
+vector <Outline> outlines;
 vector <FT_Glyph_Metrics> metrics;
 
 GLuint texBuffer, texture;
@@ -107,43 +108,71 @@ void onDisplay()
   GLfloat glyphPos = glyphStartPos;
   GLfloat shadePosX = glyphPos * scaleX + shadeOffsetX;
 
-  const int maxOutline = outlines.size();
-  for (int i=0; i < maxOutline; ++i)
+  // DEBUG: Lines
+  /*
+  for (int maxOutline = outlines.size(), i=0; i < maxOutline; ++i)
   {
-    for(int c = 0, p = 0; c < outlines[i]->outline.n_contours; ++c)
+    cout << "-- Outline -----" << endl;
+    vector<vector<FT_Vector>> contours;
+    for(int maxContour = outlines[i].contours.size(), c = 0; c < maxContour; ++c)
     {
-      glBegin(GL_TRIANGLES);
-      int numPoint = outlines[i]->outline.contours[c];
-      GLfloat startX = (outlines[i]->outline.points[p].x + glyphPos) * scaleX;
-      GLfloat startY =  outlines[i]->outline.points[p].y             * scaleY;
-      p++;
-      for(; p <= numPoint; p++)
+      cout << "-- Contour -----" << endl;
+      glBegin(GL_LINE_LOOP);
+      for(int maxPoint = outlines[i].contours[c].size(), p = 0; p < maxPoint; ++p)
       {
-        GLfloat x1 = (outlines[i]->outline.points[p-1].x + glyphPos) * scaleX;
-        GLfloat y1 =  outlines[i]->outline.points[p-1].y             * scaleY;
+        cout << outlines[i].contours[c][p].x << " " << outlines[i].contours[c][p].y << endl;
+        GLfloat x = (outlines[i].contours[c][p].x + glyphPos) * scaleX;
+        GLfloat y =  outlines[i].contours[c][p].y * scaleY;
+        glVertex2f(x, y);
+      }
+      glEnd();
+    }
+    
+    glyphPos += (outlines[i].metrics.width == 0 ? spaceWidth : outlines[i].metrics.width * density);
+    shadePosX = glyphPos * scaleX + shadeOffsetX;
+  }
+  */
 
-        GLfloat x2 = (outlines[i]->outline.points[p].x + glyphPos) * scaleX;
-        GLfloat y2 =  outlines[i]->outline.points[p].y             * scaleY;
+  for (int maxOutline = outlines.size(), i=0; i < maxOutline; ++i)
+  {
+    // cout << "-- Outline -----" << endl;
+    vector<vector<FT_Vector>> contours;
+    for(int maxContour = outlines[i].contours.size(), c = 0; c < maxContour; ++c)
+    {
+      // cout << "-- Contour -----" << endl;
+      glBegin(GL_TRIANGLES);
+      int maxPoint = outlines[i].contours[c].size();
+      for(int p = 1; p < maxPoint; ++p)
+      {
+        // cout << outlines[i].contours[c][p].x << " " << outlines[i].contours[c][p].y << endl;
+        GLfloat x1 = (outlines[i].contours[c][p-1].x + glyphPos) * scaleX;
+        GLfloat y1 =  outlines[i].contours[c][p-1].y * scaleY;
 
-        glVertex2f(shadePosX, shadePosY);
+        GLfloat x2 = (outlines[i].contours[c][p].x + glyphPos) * scaleX;
+        GLfloat y2 =  outlines[i].contours[c][p].y * scaleY;
+
         glVertex2f(x1, y1);
         glVertex2f(x2, y2);
+        glVertex2f(shadePosX, shadePosY);
       }
 
-      GLfloat x2 = (outlines[i]->outline.points[p-1].x + glyphPos) * scaleX;
-      GLfloat y2 =  outlines[i]->outline.points[p-1].y             * scaleY;
+      GLfloat x1 = (outlines[i].contours[c][0].x + glyphPos) * scaleX;
+      GLfloat y1 =  outlines[i].contours[c][0].y * scaleY;
 
-      glVertex2f(shadePosX, shadePosY);
-      glVertex2f(startX, startY);
+      GLfloat x2 = (outlines[i].contours[c][maxPoint-1].x + glyphPos) * scaleX;
+      GLfloat y2 =  outlines[i].contours[c][maxPoint-1].y * scaleY;
+
+      glVertex2f(x1, y1);
       glVertex2f(x2, y2);
+      glVertex2f(shadePosX, shadePosY);
 
       glEnd();
     }
-
-    glyphPos += (metrics[i].width == 0 ? spaceWidth : metrics[i].width * density);
+    
+    glyphPos += (outlines[i].metrics.width == 0 ? spaceWidth : outlines[i].metrics.width * density);
     shadePosX = glyphPos * scaleX + shadeOffsetX;
   }
-  
+
   // Display texture
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glClear(GL_COLOR_BUFFER_BIT);
@@ -300,7 +329,9 @@ int main(int argc, char* argv[])
   procCommandLine(argc, argv);
   printUsage();
 
-  Outliner::FetchOutlines(text, fontPath, outlines, metrics );
+  // Outliner::FetchOutlines(text, fontPath, outlines, metrics );
+  Outliner::Fetch(text, fontPath, outlines);
+  // return 0;
 
   InitGlut(argc, argv);
 

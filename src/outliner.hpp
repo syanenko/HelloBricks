@@ -3,6 +3,13 @@
 
 #include "common.hpp"
 
+struct Outline
+{
+  vector<vector<FT_Vector>> contours;
+  vector<vector<FT_Vector>> quadsegs;
+  FT_Glyph_Metrics metrics;
+};
+
 class Outliner
 {
   static void CheckFtError(const int error, const string where)
@@ -15,7 +22,7 @@ class Outliner
   }
 
 public:
-  static void FetchOutlines(const string& text, const string& fontPath, vector <FT_OutlineGlyph>& outlines, vector <FT_Glyph_Metrics>& metrics )
+  static void Fetch(const string& text, const string& fontPath, vector <Outline>& outlines )
   {
     FT_Library library;
     FT_Face    face;
@@ -27,9 +34,9 @@ public:
     CheckFtError( FT_Set_Char_Size( face, 0, 16*64, 300, 300 ), "FT_Set_Char_Size()" );
 
     size_t len = strlen( text.c_str() );
-    for (int i = 0; i < len; ++i)
+    for (int g = 0; g < len; ++g)
     {
-      glyph_index = FT_Get_Char_Index(face, text[i]);
+      glyph_index = FT_Get_Char_Index(face, text[g]);
     
       CheckFtError( FT_Load_Glyph( face, glyph_index, FT_LOAD_DEFAULT ), "FT_Load_Glyph()" );
       CheckFtError( FT_Get_Glyph( face->glyph, &glyph ), "FT_Get_Glyph()" );
@@ -40,10 +47,23 @@ public:
         exit(-1);
       }
 
-      outlines.push_back( (FT_OutlineGlyph)glyph );
-      metrics.push_back( face->glyph->metrics );
+      Outline outline;
+      outline.metrics   = face->glyph->metrics;
+      short* contours   = ((FT_OutlineGlyph)glyph)->outline.contours;
+      short maxContour  = ((FT_OutlineGlyph)glyph)->outline.n_contours;
+      FT_Vector* points = ((FT_OutlineGlyph)glyph)->outline.points;
+
+      for(int c = 0, p = 0; c < maxContour; ++c)
+      {
+        vector<FT_Vector> contour;
+        for(short maxPoint = contours[c]; p <= maxPoint; ++p)
+          contour.push_back(points[p]);
+        
+        outline.contours.push_back(contour);
+      }
+
+      outlines.push_back(outline);
     }
   }
 };
-
 #endif
