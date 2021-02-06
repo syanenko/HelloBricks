@@ -8,7 +8,7 @@ Homework for "Bricks" project
 #### When
 01/2021
 #### How
-This way: [Easy Scalable Text Rendering on the GPU](https://medium.com/@evanwallace/easy-scalable-text-rendering-on-the-gpu-c3f4d782c5ac), but without quadratic smooth and anti-aliasing (yet), with a help of [FreeType](https://www.freetype.org/index.html).
+This way: [Easy Scalable Text Rendering on the GPU](https://medium.com/@evanwallace/easy-scalable-text-rendering-on-the-gpu-c3f4d782c5ac) (but without quadratic smooth and anti-aliasing yet), with a help of [FreeType](https://www.freetype.org/index.html).
   
 
 #### Running from pre-built binaries
