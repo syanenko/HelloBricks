@@ -168,8 +168,12 @@
     <ClCompile Include="src\shader.hpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="shaders\text.frag" />
-    <None Include="shaders\text.vert" />
+    <None Include="shaders\dummy.frag" />
+    <None Include="shaders\dummy.vert" />
+    <None Include="shaders\shade.frag" />
+    <None Include="shaders\shade.vert" />
+    <None Include="shaders\smooth.frag" />
+    <None Include="shaders\smooth.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

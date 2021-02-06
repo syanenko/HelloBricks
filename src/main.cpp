@@ -25,37 +25,39 @@
 char* text = "Hello Bricks";
 char* fontPath = "fonts/times.ttf";
 
-char* pathVertexShader   = "shaders/text.vert";
-char* pathFragmentShader = "shaders/text.frag";
+char* pathVertexDummy    = "shaders/dummy.vert";
+char* pathFragmentDummy  = "shaders/dummy.frag";
+char* pathVertexShade    = "shaders/shade.vert";
+char* pathFragmentShade  = "shaders/shade.frag";
+char* pathVertexSmooth   = "shaders/smooth.vert";
+char* pathFragmentSmooth = "shaders/smooth.frag";
 
 // View control
 int winWidth  = 1024;
 int winHeight = 768;
+
 GLdouble origX = 0.0;
 GLdouble origY = 0.0;
-float defaultZoom = 0.35;
-float zoom = defaultZoom;
+GLdouble moveStep = 150;
+
+GLdouble defaultZoom = 14000.0;
+GLdouble zoom = defaultZoom;
 
 // Text rendering control
-GLfloat glyphScale = 5.0;
 GLfloat spaceWidth = 1300.0;
-GLfloat density = 1.1;
-GLfloat glyphStartPos = -13000.0;
-GLfloat shadeOffsetX =  0.1;
-GLfloat shadePosY = -0.1;
-GLfloat scaledColor = 1.0 / 255.0;
+GLfloat density = 1.1f;
+GLfloat textStartPos = -13000.0;
 
-GLfloat scaleX = 1.0 / (glyphScale * winWidth);
-GLfloat scaleY = 1.0 / (glyphScale * winHeight);
+GLfloat scaledColor = 1.0f / 255.0f;
 
-// vector <FT_OutlineGlyph> outlines;
 vector <Outline> outlines;
-vector <FT_Glyph_Metrics> metrics;
 
 GLuint texBuffer, texture;
-GLuint shaderProg = 0;
+GLuint progShade = 0;
+GLuint progDummy = 0;
+GLuint progSmooth = 0;
 
-GLuint debug_texture;
+GLfloat conics[4096];
 
 //
 // Init texture
@@ -91,29 +93,33 @@ void onDisplay()
   glBindTexture(GL_TEXTURE_2D, 0);
   glEnable(GL_TEXTURE_2D);
   glBindFramebuffer(GL_FRAMEBUFFER, texBuffer);
+  // glBindFramebuffer(GL_FRAMEBUFFER, 0); // -- DEBUG
 
   glClear(GL_COLOR_BUFFER_BIT);
-  
-  glLoadIdentity();
-  glScaled(zoom, zoom, 1);
-  glTranslated(origX, origY, 0);
 
-  glUseProgram(0);
+  // Projection
+  double ar = glutGet( GLUT_WINDOW_WIDTH ) / glutGet( GLUT_WINDOW_HEIGHT );
+  mat4 projection = glm::ortho< float >( -zoom * ar + origX, zoom * ar + origX, -zoom + origY, zoom + origY, -1.0, 1.0 );
+  mat4 modelview = mat4( 1.0 );
+
+  glUseProgram(progDummy);
+  GLint loc = glGetUniformLocation( progDummy, "u_projection" );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( projection ) );
+  loc = glGetUniformLocation( progDummy, "u_modelview" );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( modelview) );
+
+  // Draw
   glEnable(GL_BLEND);
   glBlendFunc(GL_ONE, GL_ONE);
   glBlendEquation(GL_FUNC_ADD);
 
   glColor3f(scaledColor, scaledColor, scaledColor);
 
-  GLfloat glyphPos = glyphStartPos;
-  GLfloat shadePosX = glyphPos * scaleX + shadeOffsetX;
-
-  // DEBUG: Lines
+  // -- DEBUG: Lines
   /*
   for (int maxOutline = outlines.size(), i=0; i < maxOutline; ++i)
   {
     cout << "-- Outline -----" << endl;
-    vector<vector<FT_Vector>> contours;
     for(int maxContour = outlines[i].contours.size(), c = 0; c < maxContour; ++c)
     {
       cout << "-- Contour -----" << endl;
@@ -121,57 +127,57 @@ void onDisplay()
       for(int maxPoint = outlines[i].contours[c].size(), p = 0; p < maxPoint; ++p)
       {
         cout << outlines[i].contours[c][p].x << " " << outlines[i].contours[c][p].y << endl;
-        GLfloat x = (outlines[i].contours[c][p].x + glyphPos) * scaleX;
-        GLfloat y =  outlines[i].contours[c][p].y * scaleY;
+        GLfloat x = outlines[i].contours[c][p].x;
+        GLfloat y = outlines[i].contours[c][p].y;
         glVertex2f(x, y);
       }
       glEnd();
     }
-    
-    glyphPos += (outlines[i].metrics.width == 0 ? spaceWidth : outlines[i].metrics.width * density);
-    shadePosX = glyphPos * scaleX + shadeOffsetX;
   }
   */
 
-  for (int maxOutline = outlines.size(), i=0; i < maxOutline; ++i)
+  // Outlines
+  for (int i = 0; i < outlines.size(); ++i)
   {
-    // cout << "-- Outline -----" << endl;
+    // Contours
     vector<vector<FT_Vector>> contours;
-    for(int maxContour = outlines[i].contours.size(), c = 0; c < maxContour; ++c)
+    for(size_t maxContour = outlines[i].contours.size(), c = 0; c < maxContour; ++c)
     {
-      // cout << "-- Contour -----" << endl;
+      size_t maxPoint = outlines[i].contours[c].size();
+      if(maxPoint == 0)
+        continue;
+
       glBegin(GL_TRIANGLES);
-      int maxPoint = outlines[i].contours[c].size();
       for(int p = 1; p < maxPoint; ++p)
       {
-        // cout << outlines[i].contours[c][p].x << " " << outlines[i].contours[c][p].y << endl;
-        GLfloat x1 = (outlines[i].contours[c][p-1].x + glyphPos) * scaleX;
-        GLfloat y1 =  outlines[i].contours[c][p-1].y * scaleY;
+        glVertex2f(outlines[i].contours[c][p-1].x,
+                   outlines[i].contours[c][p-1].y);
 
-        GLfloat x2 = (outlines[i].contours[c][p].x + glyphPos) * scaleX;
-        GLfloat y2 =  outlines[i].contours[c][p].y * scaleY;
+        glVertex2f(outlines[i].contours[c][p].x,
+                   outlines[i].contours[c][p].y);
 
-        glVertex2f(x1, y1);
-        glVertex2f(x2, y2);
-        glVertex2f(shadePosX, shadePosY);
+        glVertex2f(outlines[i].shadePos.x,
+                   outlines[i].shadePos.y);
       }
 
-      GLfloat x1 = (outlines[i].contours[c][0].x + glyphPos) * scaleX;
-      GLfloat y1 =  outlines[i].contours[c][0].y * scaleY;
+      glVertex2f(outlines[i].contours[c][0].x,
+                 outlines[i].contours[c][0].y);
 
-      GLfloat x2 = (outlines[i].contours[c][maxPoint-1].x + glyphPos) * scaleX;
-      GLfloat y2 =  outlines[i].contours[c][maxPoint-1].y * scaleY;
+      glVertex2f(outlines[i].contours[c][maxPoint-1].x,
+                 outlines[i].contours[c][maxPoint-1].y);
 
-      glVertex2f(x1, y1);
-      glVertex2f(x2, y2);
-      glVertex2f(shadePosX, shadePosY);
+      glVertex2f(outlines[i].shadePos.x,
+                 outlines[i].shadePos.y);
 
       glEnd();
     }
-    
-    glyphPos += (outlines[i].metrics.width == 0 ? spaceWidth : outlines[i].metrics.width * density);
-    shadePosX = glyphPos * scaleX + shadeOffsetX;
   }
+
+  // -- DEBUG
+  // glutSwapBuffers();
+  // return;
+  
+  glDisable(GL_BLEND);
 
   // Display texture
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -180,26 +186,58 @@ void onDisplay()
   glEnable(GL_TEXTURE_2D);
   glBindTexture(GL_TEXTURE_2D, texture);
 
-  glUseProgram(shaderProg);
+  glUseProgram(progShade);
 
-  GLint loc = glGetUniformLocation(shaderProg, "u_resolution");
+  loc = glGetUniformLocation( progShade, "u_projection" );
+  projection = glm::ortho< float >( -1, 1, -1, 1, -1.0, 1.0 );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( projection ) );
+
+  loc = glGetUniformLocation( progShade, "u_modelview" );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( modelview ) );
+
+  loc = glGetUniformLocation(progShade, "u_resolution");
   if (loc >= 0)
     glUniform2f( loc, (GLfloat)winWidth, (GLfloat)winHeight );
-
-  loc = glGetUniformLocation(shaderProg, "u_texture");
+  
+  loc = glGetUniformLocation(progShade, "u_texture");
   if (loc >= 0)
     glUniform1i( loc, 0 );
-
-  glLoadIdentity();
-  glScaled(1, 1, 1);
-  glTranslated(0, 0, 0);
-
+  
   glBegin(GL_QUADS);
   glTexCoord2f(0, 0); glVertex2f(-1, -1);
   glTexCoord2f(0, 1); glVertex2f(-1, +1);
   glTexCoord2f(1, 1); glVertex2f(+1, +1);
   glTexCoord2f(1, 0); glVertex2f(+1, -1);
   glEnd();
+
+  // Apply smooth
+  glUseProgram(progSmooth);
+
+  loc = glGetUniformLocation( progSmooth, "u_projection" );
+  projection = glm::ortho< float >( -zoom * ar + origX, zoom * ar + origX, -zoom + origY, zoom + origY, -1.0, 1.0 );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( projection ) );
+  
+  loc = glGetUniformLocation( progSmooth, "u_modelview" );
+  glUniformMatrix4fv( loc, 1, GL_FALSE, glm::value_ptr( modelview ) );
+  
+  for (int i = 0; i < outlines.size(); ++i)
+  {
+    for (int c = 0; c < outlines[i].conics.size(); ++c)
+    {
+      if(outlines[i].conics[c].size() > 0)
+      {
+        loc = glGetAttribLocation( progSmooth, "a_position" );
+        glVertexAttribPointer( loc, 3, GL_FLOAT, GL_FALSE, sizeof( Vertex ), &(outlines[i].conics[c][0].pos ));
+        glEnableVertexAttribArray( loc );
+    
+        loc = glGetAttribLocation( progSmooth, "a_bc" );
+        glVertexAttribPointer( loc, 3, GL_FLOAT, GL_FALSE, sizeof( Vertex ), &outlines[i].conics[c][0].bc );
+        glEnableVertexAttribArray( loc );
+    
+        glDrawArrays( GL_TRIANGLES, 0, outlines[i].conics[c].size() );
+      }
+    }
+  }
 
   CheckGlError("onDisplay()");
   glutSwapBuffers();
@@ -212,10 +250,10 @@ void onKeysSpecial(int key, int x, int y)
 {
   switch(key)
   {
-    case GLUT_KEY_RIGHT: origX -= (0.03f / zoom); break;
-    case GLUT_KEY_LEFT:  origX += (0.03f / zoom); break;
-    case GLUT_KEY_UP:    origY -= (0.03f / zoom); break;
-    case GLUT_KEY_DOWN:  origY += (0.03f / zoom); break;
+    case GLUT_KEY_RIGHT: origX -= moveStep; break;
+    case GLUT_KEY_LEFT:  origX += moveStep; break;
+    case GLUT_KEY_UP:    origY -= moveStep; break;
+    case GLUT_KEY_DOWN:  origY += moveStep; break;
   }
 
   glutPostRedisplay();
@@ -228,8 +266,8 @@ void onKeysCommon(unsigned char key, int x,int y)
 {
   switch(key)
   {
-    case '-': zoom /= 1.1f;       break;
-    case '+': zoom *= 1.1f;       break;
+    case '-': zoom *= 1.1f;       break;
+    case '+': zoom /= 1.1f;       break;
     case 13:  origX = origY = 0;
               zoom = defaultZoom; break;
     case 27:  exit(0);
@@ -329,13 +367,13 @@ int main(int argc, char* argv[])
   procCommandLine(argc, argv);
   printUsage();
 
-  // Outliner::FetchOutlines(text, fontPath, outlines, metrics );
   Outliner::Fetch(text, fontPath, outlines);
-  // return 0;
 
   InitGlut(argc, argv);
 
-  shaderProg = Shader::CreateProgram(pathVertexShader, pathFragmentShader);
+  progShade  = Shader::CreateProgram(pathVertexShade,  pathFragmentShade);
+  progDummy  = Shader::CreateProgram(pathVertexDummy,  pathFragmentDummy);
+  progSmooth = Shader::CreateProgram(pathVertexSmooth, pathFragmentSmooth);
 
   initTexture();
 

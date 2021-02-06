@@ -24,6 +24,11 @@
 
 using namespace std;
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp> 
+#include <glm/gtx/transform.hpp>
+using namespace glm;
+
 static void CheckGlError(string where)
 {
   int err = glGetError();
